@@ -1,0 +1,17 @@
+import numpy as np
+import matplotlib.pyplot as plt
+r = np.linspace(0.2, 3, 200)
+def lj_force(r, epsilon, sigma):
+    return 48 * epsilon * np.power(sigma, 12) / np.power(r, 13) - 48 * epsilon * np.power(sigma, 6) / np.power(r, 7)
+def lj_potential(r, epsilon, sigma):
+    epsilon = 1                                     # Energy minimum,well depth
+    sigma = 1                                       # Distance to zero potential
+    return 4*epsilon*((sigma/r)**12-(sigma/r)**6)   # Lennard-Jones potential
+plt.figure(figsize=(5,5))
+plt.plot(r, lj_force(r, 1, 1),color='limegreen',label=r'$F_{LJ}$',lw=3)
+plt.plot(r, lj_potential(r,1,1),color='violet',label=r'$V_{LJ}$',lw=3)
+plt.xlabel(r'$r$/Å',fontsize=10);plt.ylabel('F /$eVÅ^{-1}$',fontsize=10)
+plt.ylim([-12,5])
+plt.axhline(0, color='grey',linestyle='--',linewidth=2.3)
+plt.axvline(1, color='grey',linestyle='--',linewidth=2.3)
+plt.legend(loc='upper right')
