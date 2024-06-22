@@ -1,0 +1,16 @@
+from tabulate import tabulate
+file_path = 'conf.gro'
+a = open('my.txt','w') 
+with open(file_path, 'r') as file:
+    content = file.readlines()
+    headers = [["atoms", "X", "Y", "Z"]]
+    a.write("%s\n" %tabulate(headers, tablefmt="plain"))
+    for row in content[2:1563]:
+        p = row.split()
+        if p[1] == 'OW':
+            table = [[p[1],p[3],p[4],p[5]]]
+            a.write("%s\n" % tabulate(table, tablefmt="plain", floatfmt=".3f", numalign="right"))
+            
+        else:
+            pass
+a.close()
