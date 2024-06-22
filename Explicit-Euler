@@ -1,0 +1,22 @@
+import numpy as np
+import matplotlib.pyplot as plt
+f = lambda x, s: np.sin(x)
+h = 0.01 
+x = np.arange(0, 1 + h, h) 
+s0 = 0
+# Explicit Euler Method
+s = np.zeros(len(x))
+s[0] = s0
+
+for i in range(0, len(x) - 1):
+    s[i + 1] = s[i] + h*f(x[i], s[i])
+
+plt.figure(figsize = (8, 5))
+plt.plot(x, s, 'g--', label='Approximate')
+plt.plot(x, np.sin(5*x), '-', label='Exact')
+
+plt.xlabel('x')
+plt.ylabel('f(x)')
+plt.grid()
+plt.legend(bbox_to_anchor=(1.01, 1), loc='upper left')
+plt.show()
