@@ -1,0 +1,24 @@
+#Euler Explicit and Euler Implicit
+
+import numpy as np
+import matplotlib.pyplot as plt
+x = np.linspace(0, 1, 25)   #gridpoints
+def euler_explicit(x):
+        y = np.zeros_like(x)  #empty array
+        h = x[1] - x[0]   #step size
+        for i in range(1, len(x)):
+            y[i] = y[i-1] -50*h*(y[i-1] - np.cos(x[i]))
+        return y
+def euler_implicit(x):
+        y = np.zeros_like(x)  #empty array
+        h = x[1] - x[0]    #step size
+        for i in range(1, len(x)):
+            y[i] = (y[i-1] + 50*h*np.cos(x[i])) / (50*h + 1)
+        return y
+def solution(x):
+        return (50/2501)*(np.sin(x) + 50*np.cos(x)) - (2500/2501)*np.exp(-50*x)
+plt.plot(x,euler_implicit(x),color='blue',label='Implicit')
+plt.plot(x,euler_explicit(x),color='green',label='Explicit')
+plt.plot(x,solution(x),color='black',label='Analytical')
+plt.xlabel(r'$x$')
+plt.legend(loc='upper right')
