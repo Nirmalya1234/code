@@ -1,0 +1,193 @@
+import MDAnalysis as mda
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
+from collections import defaultdict
+from scipy.ndimage import gaussian_filter
+from mpl_toolkits.mplot3d import Axes3D
+# Plotting style
+plt.style.use('seaborn-v0_8-muted')
+
+# Constants
+k_B = 0.008314  # kJ/mol·K
+T = 298.15      # K
+RT = k_B * T
+
+# Histogram bins
+r_min, r_max, r_bins = 1.0, 5.0, 100
+theta_min, theta_max, theta_bins = 0, np.pi/3, 90
+
+# Load trajectory
+u = mda.Universe("nvt_run.gro", "nvt_run_100.trr")
+donors = u.select_atoms("resname MEOH and name OG")
+hydrogens = u.select_atoms("resname MEOH and name HG1")
+acceptors = u.select_atoms("resname NMA and name O12")
+
+# Store data by category
+results = defaultdict(lambda: {'r': [], 'theta': []})
+
+# Loop over trajectory
+for ts in u.trajectory:
+    donor_hbond_counts = defaultdict(int)
+    frame_hbonds = []
+
+    for i, donor in enumerate(donors):
+        hydrogen = hydrogens[i]
+        for acceptor in acceptors:
+            r_vec = acceptor.position - donor.position
+            r = np.linalg.norm(r_vec)
+            if r > 3.5:
+                continue
+            h_vec = hydrogen.position - donor.position
+            if np.linalg.norm(h_vec) < 1e-3:
+                continue
+            cos_theta = np.dot(h_vec, r_vec) / (np.linalg.norm(h_vec) * np.linalg.norm(r_vec))
+            theta = np.arccos(np.clip(cos_theta, -1.0, 1.0))
+            if theta > np.deg2rad(40):
+                continue
+            frame_hbonds.append((i, r, theta))
+            donor_hbond_counts[i] += 1
+            
+    for donor_idx, r, theta in frame_hbonds:
+        count = donor_hbond_counts[donor_idx]
+        if count == 1:
+            results['1HB']['r'].append(r)
+            results['1HB']['theta'].append(theta)
+        #elif count == 2:
+            #results['2HB']['r'].append(r)
+            #results['2HB']['theta'].append(theta)"
+
+# Analysis function
+def analyze_and_plot(r_list, theta_list, label):
+    # Histogram
+    H, r_edges, theta_edges = np.histogram2d(
+        r_list, theta_list,
+        bins=[r_bins, theta_bins],
+        range=[[r_min, r_max], [theta_min, theta_max]],
+        density=True
+    )
+    r_centers = 0.5 * (r_edges[:-1] + r_edges[1:])
+    theta_centers = 0.5 * (theta_edges[:-1] + theta_edges[1:])
+    R, THETA = np.meshgrid(r_centers, theta_centers, indexing='ij')
+
+    # Random reference distribution
+    P_rand = 4 * np.pi * R**2 * np.sin(THETA)
+    P_rand /= np.sum(P_rand)
+
+    H[H == 0] = 1e-12
+    P_rand[P_rand == 0] = 1e-12
+    H_smooth = gaussian_filter(H, sigma=1)
+    PMF = -RT * np.log(H_smooth / P_rand)
+    PMF -= np.min(PMF)
+    PMF = np.clip(PMF, 0, 30)
+
+
+def analyze_and_plot(r_list, theta_list, label):
+    H, r_edges, theta_edges = np.histogram2d(
+        r_list, theta_list,
+        bins=[r_bins, theta_bins],
+        range=[[r_min, r_max], [theta_min, theta_max]],
+        density=True
+    )
+    r_centers = 0.5 * (r_edges[:-1] + r_edges[1:])
+    theta_centers = 0.5 * (theta_edges[:-1] + theta_edges[1:])
+    R, THETA = np.meshgrid(r_centers, theta_centers, indexing='ij')
+
+    # Reference distribution
+    P_rand = 4 * np.pi * R**2 * np.sin(THETA)
+    P_rand /= np.sum(P_rand)
+
+    H[H == 0] = 1e-12
+    P_rand[P_rand == 0] = 1e-12
+
+    # PMF calculation
+    H_smooth = gaussian_filter(H, sigma=1)
+    PMF = -RT * np.log(H_smooth / P_rand)
+    PMF -= np.min(PMF)
+    PMF = np.clip(PMF, 0, 30)
+
+    # 3D Surface Plot
+    fig = plt.figure(figsize=(10, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    surf = ax.plot_surface(R, np.rad2deg(THETA), PMF, cmap='jet', edgecolor='k', linewidth=0.3)
+    ax.set_xlabel('r (Å)')
+    ax.set_ylabel('θ (Degrees)')
+    ax.set_zlabel('PMF (kJ/mol)')
+    ax.set_title(f'3D PMF Surface: {label}')
+    fig.colorbar(surf, ax=ax, shrink=0.5)
+    plt.tight_layout()
+    plt.show()
+
+    # 2D Contour Plot
+    plt.figure(figsize=(8, 6))
+    cp = plt.contourf(R, np.rad2deg(THETA), PMF, levels=20, cmap='jet')
+    plt.xlabel('r (Å)')
+    plt.ylabel('θ (Degrees)')
+    plt.title(f'PMF Contour: {label}')
+    plt.colorbar(cp, label='PMF (kJ/mol)')
+    plt.tight_layout()
+    plt.show()
+
+    # --- Figure 2C: 1D PMF (θ < 40°)
+    theta_linear_mask = theta_centers <= np.deg2rad(40)
+    pmf_linear = PMF[:, theta_linear_mask]
+    pmf_linear_1d = np.mean(pmf_linear, axis=1)
+    pmf_linear_1d_smooth = savgol_filter(pmf_linear_1d, window_length=7, polyorder=3)
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(r_centers, pmf_linear_1d_smooth, color='teal', lw=2, label='Smoothed PMF')
+    plt.axhline(np.min(pmf_linear_1d_smooth), linestyle='--', color='gray', label='Min')
+    plt.axhline(np.max(pmf_linear_1d_smooth), linestyle=':', color='gray', label='Max')
+    plt.xlabel('Distance $r$ (Å)')
+    plt.ylabel(r'PMF$(\theta < 2^\circ)$ [kJ/mol]')
+    plt.title(f'1D PMF for Linear H-Bonds ({label})')
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+    # --- Figure 3A: Weighted PMF
+    weighted_pmf = H * PMF
+    plt.figure(figsize=(9, 7))
+    plt.contourf(R, np.rad2deg(THETA), weighted_pmf, levels=100, cmap='magma')
+    plt.colorbar(label=r'$P(r, \theta) \cdot PMF(r, \theta)$', pad=0.02)
+    plt.xlabel('O–O Distance $r$ (Å)')
+    plt.ylabel('Angle $\\theta$ (°)')
+    plt.title(f'Weighted PMF ({label})')
+    plt.tight_layout()
+    plt.show()
+
+    # --- ΔG_HB using normalized distributions
+    rmin_int, rmax_int = 2.0, 5.0
+    r_mask = (r_centers >= rmin_int) & (r_centers <= rmax_int)
+    theta_mask = (theta_centers >= 0) & (theta_centers <= np.deg2rad(40))
+
+    # Subgrids
+    H2 = H
+    P_rand2 = P_rand
+    dr = r_edges[1] - r_edges[0]
+    dtheta = theta_edges[1] - theta_edges[0]
+    P_sub = H2[np.ix_(r_mask, theta_mask)]
+    P_rand_sub = P_rand2[np.ix_(r_mask, theta_mask)]
+
+    # Normalization factors (no Jacobian)
+    zeta = np.sum(P_sub) * dr * dtheta
+    zeta_rand = np.sum(P_rand_sub) * dr * dtheta
+
+    P_norm = P_sub / zeta
+    P_rand_norm = P_rand_sub / zeta_rand
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        integrand = P_norm * np.log(P_norm / P_rand_norm)
+        integrand[np.isnan(integrand)] = 0.0
+        integrand[np.isinf(integrand)] = 0.0
+        delta_G = -RT * np.sum(integrand) * dr * dtheta
+
+    print(f"ΔG_HB (1st solvation shell, {label}, normalized): {delta_G:.3f} kJ/mol\n")
+
+# Run for both 1HB and 2HB
+for label, data in results.items():
+    if data['r'] and data['theta']:
+        analyze_and_plot(data['r'], data['theta'], label)
+    else:
+        print(f"No data found for {label}")
